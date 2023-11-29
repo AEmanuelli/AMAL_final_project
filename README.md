@@ -4,4 +4,4 @@ Ce dépôt contient les ressources et le code pour le projet final du cours AMAL
 
 ## Liens Utiles
 
-- [LMU Paper](https://proceedings.neurips.cc/paper/2019/file/952285b9b7e7a1be5aa7849f32ffff05-Paper.pdf):
+- [LMU Paper](https://proceedings.neurips.cc/paper/2019/file/952285b9b7e7a1be5aa7849f32ffff05-Paper.pdf)
