@@ -16,7 +16,7 @@ class PermutedMNIST(Dataset):
     def __len__(self):
         return len(self.images)
 
-    def __getitem__(self, idx, orig = True):
+    def __getitem__(self, idx, orig = False):
         # Application de la permutation
         original_image = self.images[idx].reshape(1, 28, 28)
         image = self.images[idx].reshape(-1)[self.permutation].reshape(1, 28, 28)
@@ -26,29 +26,23 @@ class PermutedMNIST(Dataset):
         else : 
             return torch.tensor(image, dtype=torch.float32), torch.tensor(label, dtype=torch.int64)
 
-# Création des datasets et DataLoaders
-train_dataset = PermutedMNIST(train=True)
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-
-test_dataset = PermutedMNIST(train=False)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
 # Chargement d'une image échantillon et de son label depuis le DataLoader
 # Affichage de l'image originale et de l'image permutée
-for i, (permuted_images, labels, original_image) in enumerate(test_loader): #on regrade que ça marche bien sur le test, sur le train c random sinon
+# for i, (permuted_images, labels, original_image) in enumerate(test_loader): #on regrade que ça marche bien sur le test, sur le train c random sinon
     
-    original_image = original_image[4]
-    permuted_image = permuted_images[4]
-    label = labels[4].item()
+#     original_image = original_image[4]
+#     permuted_image = permuted_images[4]
+#     label = labels[4].item()
 
-    plt.figure(figsize=(12, 6))
-    plt.subplot(1, 2, 1)
-    plt.imshow(original_image[0], cmap='gray')
-    plt.title(f'Original Image, Label: {label}')
+#     plt.figure(figsize=(12, 6))
+#     plt.subplot(1, 2, 1)
+#     plt.imshow(original_image[0], cmap='gray')
+#     plt.title(f'Original Image, Label: {label}')
 
-    plt.subplot(1, 2, 2)
-    plt.imshow(permuted_image[0], cmap='gray')
-    plt.title(f'Permuted Image, Label: {label}')
-    plt.show()
+#     plt.subplot(1, 2, 2)
+#     plt.imshow(permuted_image[0], cmap='gray')
+#     plt.title(f'Permuted Image, Label: {label}')
+#     plt.show()
 
-    break
+#     break

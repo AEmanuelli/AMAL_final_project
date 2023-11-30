@@ -421,13 +421,18 @@ class Block(nn.Module):
         x = x + self.drop_path(self.mlp(x))
         return x
 
-
+### Je ne comprend pas les listes de parametres donnés en entrée ici !!
 class ConvLMU(nn.Module):
     def __init__(self,
                  img_size_h=128, img_size_w=128, patch_size=16, in_channels=1, num_classes=35,
-                 embed_dims=[64, 128, 256], num_heads=[1, 2, 4], mlp_ratios=[4, 4, 4], qkv_bias=False, qk_scale=None,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm,
-                 depths=[6, 8, 6], sr_ratios=[8, 4, 2], T = 4, act_type='spike', patch_embed=Tokenizer, block=Block, attn=LMU, mlp=ConvFFN, with_head_lif=False,
+                 embed_dims=64,#[64, 128, 256], 
+                 num_heads=1,#[1, 2, 4], 
+                 mlp_ratios=4,#[4, 4, 4], 
+                 qkv_bias=False, qk_scale=None,
+                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0.85, norm_layer=nn.LayerNorm,
+                 depths=6,#[6, 8, 6], 
+                 sr_ratios=8,#[8, 4, 2], 
+                 T = 4, act_type='spike', patch_embed=Tokenizer, block=Block, attn=LMU, mlp=ConvFFN, with_head_lif=False,
                  test_mode='normal'
                  ):
         super().__init__()
