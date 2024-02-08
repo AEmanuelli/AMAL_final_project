@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from model import lmu_rnn_conv1d
+from tqdm import tqdm
+from model import *
 from dataloader import PermutedMNIST
 from torch.utils.data import DataLoader
 
@@ -20,25 +21,35 @@ batch_size = 100
 lr_decay_factor = 0.85
 lr_decay_step = 5
 
+# from utils.mnist_task import PMNISTData
+# def get_data_iterator(batch_size, seed):
+#     data_iterator = PMNISTData(batch_size=batch_size, seed=seed)
+#     return data_iterator
+
+
 # Création des datasets et DataLoaders
 train_dataset = PermutedMNIST(train=True)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
 test_dataset = PermutedMNIST(train=False)
+
+
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
+# train_loader = get_data_iterator(100, 1)
+# test_loader = get_data_iterator(100, 1)
+
 # Création du modèle
-model = lmu_rnn_conv1d(pretrained = False, num_classes = 10)  # Utilisation du modèle défini dans model.py
+model = LMU(dim=8, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0, proj_drop=0., sr_ratio=1, use_all_h=True)  # Utilisation du modèle défini dans model.py
 
 # Critère de perte et optimiseur
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Boucle d'entraînement
-for epoch in range(num_epochs):
+for epoch in tqdm(range(num_epochs)):
     model.train()  # Mode entraînement
     total_loss = 0
-    for images, labels in train_loader:
+    for images, labels in tqdm(train_loader):
         optimizer.zero_grad()
         outputs = model(images)
         loss = criterion(outputs, labels)

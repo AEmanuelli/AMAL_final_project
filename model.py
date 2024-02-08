@@ -131,9 +131,11 @@ class LMUFFTCell(nn.Module):
 
         self.W_u = nn.Linear(in_features = input_size, out_features = 1)
         self.f_u = nn.ReLU()
+
         self.W_h = nn.Linear(in_features = memory_size + input_size, out_features = hidden_size)
         self.f_h = nn.ReLU()
 
+        
         A, B = self.stateSpaceMatrices()
         self.register_buffer("A", A)
         self.register_buffer("B", B) 
@@ -180,8 +182,10 @@ class LMUFFTCell(nn.Module):
     def forward(self, x):
 
         batch_size, seq_len, input_size = x.shape
-
-        u = self.f_u(self.W_u(x)) 
+        print(x.shape, "avant le forward de la LMUFFTCELL") 
+        tmp = self.W_u(x)
+        print(tmp.shape)
+        u = self.f_u(tmp) 
 
         fft_input = u.permute(0, 2, 1) 
         fft_u = fft.rfft(fft_input, n = 2*seq_len, dim = -1) 
@@ -206,55 +210,6 @@ class LMUFFTCell(nn.Module):
 
         return h, m
 
-class SpikingLMUFFTCell(LMUFFTCell):
-
-    def __init__(self, input_size, hidden_size, memory_size, seq_len, theta):
-
-        super(SpikingLMUFFTCell, self).__init__(input_size, hidden_size, memory_size, seq_len, theta)
-
-        if_bn = True
-        self.bn_u = nn.BatchNorm1d(1) if if_bn else nn.Identity()
-        self.f_u = get_act('spike', tau=2.0, detach_reset=True)
-        self.bn_m = nn.BatchNorm1d(memory_size) if if_bn else nn.Identity()
-        self.f_m = get_act('spike', tau=2.0, detach_reset=True)
-        self.bn_h = nn.BatchNorm1d(hidden_size) if if_bn else nn.Identity()
-        self.f_h = get_act('spike', tau=2.0, detach_reset=True)
-    def forward(self, x):
-
-        batch_size, seq_len, input_size = x.shape # B, N, C
-
-        u_spike = self.f_u(self.bn_u(self.W_u(x).transpose(-1,-2)).permute(2,0,1).contiguous())
-
-        u = u_spike.permute(1,0,2).contiguous() 
-
-        fft_input = u.permute(0, 2, 1) 
-        fft_u = fft.rfft(fft_input, n = 2*seq_len, dim = -1) 
-
-        temp = fft_u * self.fft_H.unsqueeze(0) 
-
-        m = fft.irfft(temp, n = 2*seq_len, dim = -1)
-        m = m[:, :, :seq_len] 
-        m = self.f_m(self.bn_m(m).permute(2,1,0).contiguous()).permute(2,1,0).contiguous()
-        m = m.permute(0, 2, 1)
-
-        input_h = torch.cat((m, x), dim = -1) 
-
-        h = self.f_h(self.bn_h(self.W_h(input_h).transpose(-1,-2)).permute(2,0,1).contiguous()) 
-        h = h.permute(1,0,2).contiguous() 
-        h_n = h[:, -1, :]
-
-        h_n = h_n.unsqueeze(-1)
-
-        return h, h_n
-    def forward_recurrent(self, x, m_last):
-        u_spike = self.f_u(self.bn_u(self.W_u(x).transpose(-1,-2)).permute(2,0,1).contiguous()) 
-        u = u_spike.permute(1,0,2).contiguous() 
-        m = m_last @ self.A.T + u @ self.B.T  
-        input_h = torch.cat((m, x), dim = -1) 
-        h = self.f_h(self.bn_h(self.W_h(input_h).transpose(-1,-2)).permute(2,0,1).contiguous()) 
-        h = h.permute(1,0,2).contiguous()
-
-        return h, m
 class ConvFFN(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, drop=0., act_type='spike'):
         super().__init__()
@@ -310,6 +265,7 @@ class ConvFFNMs(nn.Module):
         x = self.fc2_conv(x)
         
         return x
+
 class LMU(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, use_all_h=True):
         super().__init__()
@@ -318,15 +274,16 @@ class LMU(nn.Module):
         self.hidden_size = dim
         self.memory_size = dim
         self.use_all_h = use_all_h
-        self.lmu = LMUFFTCell(input_size=dim, hidden_size=self.hidden_size, memory_size=self.memory_size, seq_len=128, theta=128)
+        self.lmu = LMUFFTCell(input_size=dim, hidden_size=self.hidden_size, memory_size=self.memory_size, seq_len=1, theta=128)
 
         self.proj_conv = nn.Conv1d(dim, dim, kernel_size=1, stride=1)
         self.proj_bn = nn.BatchNorm1d(dim)
 
     def forward(self, x):
-        x = x.transpose(-1,-2).contiguous() 
+        print(x.shape)
+        x = x.transpose(-1,-2).contiguous()
+        print(x.shape)
         h, h_n = self.lmu(x) 
-
         x = h.transpose(-1,-2).contiguous() if self.use_all_h else h_n.unsqueeze(-1) # h or h_n
 
         x = self.proj_conv(x)
@@ -353,6 +310,57 @@ class LMU(nn.Module):
         x = self.proj_conv(x)
         x = self.proj_bn(x)
         return x 
+
+# SPIKING
+class SpikingLMUFFTCell(LMUFFTCell):
+
+    def __init__(self, input_size, hidden_size, memory_size, seq_len, theta):
+
+        super(SpikingLMUFFTCell, self).__init__(input_size, hidden_size, memory_size, seq_len, theta)
+
+        if_bn = True
+        self.bn_u = nn.BatchNorm1d(1) if if_bn else nn.Identity()
+        self.f_u = get_act('spike', tau=2.0, detach_reset=True)
+        self.bn_m = nn.BatchNorm1d(memory_size) if if_bn else nn.Identity()
+        self.f_m = get_act('spike', tau=2.0, detach_reset=True)
+        self.bn_h = nn.BatchNorm1d(hidden_size) if if_bn else nn.Identity()
+        self.f_h = get_act('spike', tau=2.0, detach_reset=True)
+    def forward(self, x):
+
+        batch_size, seq_len, input_size = x.shape # B, N, C
+
+        u_spike = self.f_u(self.bn_u(self.W_u(x).transpose(-1,-2)).permute(2,0,1).contiguous())
+
+        u = u_spike.permute(1,0,2).contiguous() 
+
+        fft_input = u.permute(0, 2, 1) 
+        fft_u = fft.rfft(fft_input, n = 2*seq_len, dim = -1) 
+
+        temp = fft_u * self.fft_H.unsqueeze(0) 
+
+        m = fft.irfft(temp, n = 2*seq_len, dim = -1)
+        m = m[:, :, :seq_len] 
+        m = self.f_m(self.bn_m(m).permute(2,1,0).contiguous()).permute(2,1,0).contiguous()
+        m = m.permute(0, 2, 1)
+
+        input_h = torch.cat((m, x), dim = -1) 
+
+        h = self.f_h(self.bn_h(self.W_h(input_h).transpose(-1,-2)).permute(2,0,1).contiguous()) 
+        h = h.permute(1,0,2).contiguous() 
+        h_n = h[:, -1, :]
+
+        h_n = h_n.unsqueeze(-1)
+
+        return h, h_n
+    def forward_recurrent(self, x, m_last):
+        u_spike = self.f_u(self.bn_u(self.W_u(x).transpose(-1,-2)).permute(2,0,1).contiguous()) 
+        u = u_spike.permute(1,0,2).contiguous() 
+        m = m_last @ self.A.T + u @ self.B.T  
+        input_h = torch.cat((m, x), dim = -1) 
+        h = self.f_h(self.bn_h(self.W_h(input_h).transpose(-1,-2)).permute(2,0,1).contiguous()) 
+        h = h.permute(1,0,2).contiguous()
+
+        return h, m
 class SLMUMs(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, use_all_h=True):
         super().__init__()
@@ -403,7 +411,7 @@ class SLMUMs(nn.Module):
         x = self.proj_conv(x)
         x = self.proj_bn(x)
         return x 
-
+# SPIKING
 class Block(nn.Module):
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0.1, norm_layer=nn.LayerNorm, sr_ratio=1, act_type='spike', attn=LMU, mlp=ConvFFN):
@@ -424,7 +432,7 @@ class Block(nn.Module):
 ### Je ne comprend pas les listes de parametres donnés en entrée ici !!
 class ConvLMU(nn.Module):
     def __init__(self,
-                 img_size_h=128, img_size_w=128, patch_size=16, in_channels=1, num_classes=35,
+                 img_size_h=128, img_size_w=128, patch_size=16, in_channels=1, num_classes=10,
                  embed_dims=64,#[64, 128, 256], 
                  num_heads=1,#[1, 2, 4], 
                  mlp_ratios=4,#[4, 4, 4], 
@@ -432,7 +440,7 @@ class ConvLMU(nn.Module):
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.85, norm_layer=nn.LayerNorm,
                  depths=6,#[6, 8, 6], 
                  sr_ratios=8,#[8, 4, 2], 
-                 T = 4, act_type='spike', patch_embed=Tokenizer, block=Block, attn=LMU, mlp=ConvFFN, with_head_lif=False,
+                 T = 4, act_type='gelu', patch_embed=Tokenizer, block=Block, attn=LMU, mlp=ConvFFN, with_head_lif=False,
                  test_mode='normal'
                  ):
         super().__init__()
@@ -523,3 +531,68 @@ def slmu_rnn_ms_conv1d1(pretrained_cfg=None, pretrained_cfg_overlay=None, pretra
     )
     model.default_cfg = _cfg()
     return model
+
+
+
+
+
+
+# %%
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from dataloader import PermutedMNIST
+from torch.utils.data import DataLoader
+
+# Paramètres pour l'initialisation de lmu_rnn_conv1d
+embed_dims = 256  # Exemple de dimension d'embedding
+num_heads = 8  # Exemple de nombre de têtes d'attention
+mlp_ratio = 4.  # Exemple de ratio pour les couches MLP
+depth = 6  # Exemple de profondeur de chaque bloc
+num_classes = 10  # Nombre de classes dans psMNIST
+img_size = 28  # Taille de l'image dans psMNIST (28x28)
+
+# Paramètres d'entraînement
+num_epochs = 50
+learning_rate = 0.0001
+batch_size = 1
+lr_decay_factor = 0.85
+lr_decay_step = 5
+
+# Création des datasets et DataLoaders
+train_dataset = PermutedMNIST(train=True)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+test_dataset = PermutedMNIST(train=False)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+# Création du modèle
+model = LMU(dim=784, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0, proj_drop=0., sr_ratio=1, use_all_h=True)  # Utilisation du modèle défini dans model.py
+
+# Critère de perte et optimiseur
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+# Boucle d'entraînement
+for epoch in range(num_epochs):
+    model.train()  # Mode entraînement
+    total_loss = 0
+    for images, labels in train_loader:
+        optimizer.zero_grad()
+        images = np.reshape(images, (1, 1, 784))
+        print(images.shape)
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+
+    # Mise à jour du taux d'apprentissage
+    if (epoch + 1) % lr_decay_step == 0:
+        for param_group in optimizer.param_groups:
+            param_group['lr'] *= lr_decay_factor
+
+    # Affichage des informations d'entraînement
+    avg_loss = total_loss / len(train_loader)
+    print(f"Epoch {epoch + 1}/{num_epochs}, Average Loss: {avg_loss:.4f}")
