@@ -34,8 +34,6 @@ class Tokenizer(nn.Module):
         # Appliquer la couche de Batch Normalization
         x = self.batch_norm(x)
         return x
-
-
 class ConvFFN(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, drop=0., act_type='spike'):
         super().__init__()
@@ -91,8 +89,6 @@ class ConvFFNMs(nn.Module):
         x = self.fc2_conv(x)
         
         return x
-
-
 class LMUFFTCell(nn.Module):
 
     def __init__(self, input_size, hidden_size, memory_size, seq_len, theta):
@@ -184,7 +180,6 @@ class LMUFFTCell(nn.Module):
         h = self.f_h(self.W_h(input_h)) 
 
         return h, m
-
 class LMU(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, use_all_h=True):
         super().__init__()
@@ -229,8 +224,6 @@ class LMU(nn.Module):
         x = self.proj_conv(x)
         x = self.proj_bn(x)
         return x 
-
-
 class Block(nn.Module):
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0.1, norm_layer=nn.LayerNorm, sr_ratio=1, act_type='spike', attn=LMU, mlp=ConvFFN):
@@ -271,11 +264,11 @@ class ConvLMU(nn.Module):
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depths)]  # stochastic depth decay rule
 
-        # patch_embed = patch_embed(img_size_h=img_size_h,
-        #                          img_size_w=img_size_w,
-        #                          patch_size=patch_size,
-        #                          in_channels=in_channels,
-        #                          embed_dims=embed_dims, act_type=act_type)
+        patch_embed = patch_embed(img_size_h=img_size_h,
+                                 img_size_w=img_size_w,
+                                 patch_size=patch_size,
+                                 in_channels=in_channels,
+                                 embed_dims=embed_dims, act_type=act_type)
 
         block = nn.ModuleList([block(
             dim=embed_dims, num_heads=num_heads, mlp_ratio=mlp_ratios, qkv_bias=qkv_bias,
@@ -332,8 +325,6 @@ class ConvLMU(nn.Module):
             x = x.mean(dim=-1) 
         x = self.head(x) 
         return x
-
-
 # %%
 
 
@@ -360,7 +351,7 @@ test_dataset = PermutedMNIST(train=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # Création du modèle
-model = ConvLMU()  # Utilisation du modèle défini dans model.py
+model = LMU(dim=784, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0, proj_drop=0., sr_ratio=1, use_all_h=True)  # Utilisation du modèle défini dans model.py
 
 # Critère de perte et optimiseur
 criterion = nn.CrossEntropyLoss()
