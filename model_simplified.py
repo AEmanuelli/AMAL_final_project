@@ -26,14 +26,46 @@ def get_act(act_type = 'gelu', **act_params):
         return nn.Identity()
 
 class Tokenizer(nn.Module):
-    def __init__(self, input_size):
+    def __init__(self,
+                 img_size_h=28,
+                 img_size_w=28,
+                 patch_size=10,
+                 n_conv_layers=1,
+                 in_channels=128,
+                 embed_dims=256,
+                 **kwargs):
         super(Tokenizer, self).__init__()
-        self.batch_norm = nn.BatchNorm1d(input_size)
+        in_planes=embed_dims
+        n_filter_list = [in_channels] + \
+                        [in_planes for _ in range(n_conv_layers - 1)] + \
+                        [embed_dims]
+
+        self.conv_layers = nn.Sequential(
+            *[nn.Sequential(
+                nn.Conv1d(n_filter_list[i], n_filter_list[i + 1],
+                          kernel_size=3,
+                          stride=1,
+                          padding=1, bias=False),
+                nn.ReLU(),
+                nn.MaxPool1d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False) if i == -1 else nn.Identity(),
+                nn.BatchNorm1d(n_filter_list[i + 1]),
+            )
+                for i in range(n_conv_layers)
+            ])
+        
+        self.rpe_conv = nn.Conv1d(embed_dims, embed_dims, kernel_size=3, stride=1, padding=1, bias=False)
+
+    def sequence_length(self, n_channels=3, height=224, width=224):
+        return self.forward(torch.zeros((1, n_channels, height, width))).shape[1]
 
     def forward(self, x):
-        # Appliquer la couche de Batch Normalization
-        x = self.batch_norm(x)
+        x = x.permute(0,2,1).contiguous() 
+        x = self.conv_layers(x)
+        x_rpe = x.clone()
+        x_rpe = self.rpe_conv(x_rpe)
+        x = x + x_rpe
         return x
+
 class ConvFFN(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, drop=0., act_type='spike'):
         super().__init__()
@@ -244,8 +276,8 @@ class Block(nn.Module):
 ### Je ne comprend pas les listes de parametres donnés en entrée ici !!
 class ConvLMU(nn.Module):
     def __init__(self,
-                 img_size_h=128, img_size_w=128, patch_size=16, in_channels=1, num_classes=10,
-                 embed_dims=64,#[64, 128, 256], 
+                 img_size_h=28, img_size_w=28, patch_size=16, in_channels=1, num_classes=10,
+                 embed_dims=128,#[64, 128, 256], 
                  num_heads=1,#[1, 2, 4], 
                  mlp_ratios=4,#[4, 4, 4], 
                  qkv_bias=False, qk_scale=None,
@@ -339,7 +371,7 @@ img_size = 28  # Taille de l'image dans psMNIST (28x28)
 # Paramètres d'entraînement
 num_epochs = 50
 learning_rate = 0.0001
-batch_size = 1
+batch_size = 10
 lr_decay_factor = 0.85
 lr_decay_step = 5
 
@@ -351,7 +383,7 @@ test_dataset = PermutedMNIST(train=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # Création du modèle
-model = LMU(dim=784, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0, proj_drop=0., sr_ratio=1, use_all_h=True)  # Utilisation du modèle défini dans model.py
+model = ConvLMU(num_heads=8, qkv_bias=False, qk_scale=None)  # Utilisation du modèle défini dans model.py
 
 # Critère de perte et optimiseur
 criterion = nn.CrossEntropyLoss()
@@ -363,7 +395,7 @@ for epoch in range(num_epochs):
     total_loss = 0
     for images, labels in train_loader:
         optimizer.zero_grad()
-        images = np.reshape(images, (1,1,784))
+        # images = np.reshape(images, (1,1,784))
         print(images.shape)
         outputs = model(images)
         loss = criterion(outputs, labels)
