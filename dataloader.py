@@ -16,15 +16,16 @@ class PermutedMNIST(Dataset):
     def __len__(self):
         return len(self.images)
 
-    def __getitem__(self, idx, orig = False):
-        # Application de la permutation
+    def __getitem__(self, idx, orig=False):
+    # Application de la permutation
         original_image = self.images[idx].reshape(1, 28, 28)
-        image = self.images[idx].reshape(-1)[self.permutation].reshape(1, 28, 28)
+        image = self.images[idx][self.permutation].reshape(1, 28, 28)
         label = self.labels[idx]
-        if orig : 
+        if orig:
             return torch.tensor(image, dtype=torch.float32), torch.tensor(label, dtype=torch.int64), torch.tensor(original_image, dtype=torch.int64)
-        else : 
+        else:
             return torch.tensor(image, dtype=torch.float32), torch.tensor(label, dtype=torch.int64)
+
 
 
 # Chargement d'une image échantillon et de son label depuis le DataLoader
